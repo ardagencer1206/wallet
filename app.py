@@ -3,6 +3,7 @@ from flask import Flask, render_template, redirect, url_for, flash, request
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from models import db, User
 from forms import RegisterForm, LoginForm
+from sqlalchemy import inspect, text   # eklendi
 
 def mysql_url_from_railway():
     host = os.getenv("MYSQLHOST")
@@ -32,6 +33,15 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+
+        # balance sütunu yoksa tabloya ekle
+        inspector = inspect(db.engine)
+        cols = [c['name'] for c in inspector.get_columns('user')]
+        if 'balance' not in cols:
+            db.session.execute(
+                text("ALTER TABLE user ADD COLUMN balance DECIMAL(18,2) NOT NULL DEFAULT 0.00")
+            )
+            db.session.commit()
 
     @app.route("/")
     def home():
