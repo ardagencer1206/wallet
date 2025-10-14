@@ -14,4 +14,5 @@ class LoginForm(FlaskForm):
 class TransferForm(FlaskForm):
     to_email = StringField("Alıcı Email", validators=[DataRequired(), Email()])
     amount = DecimalField("Miktar (SRDS)", places=2, validators=[DataRequired(), NumberRange(min=0.01)])
+    message = TextAreaField("Mesaj", validators=[Optional()]) 
     submit = SubmitField("Gönder")
