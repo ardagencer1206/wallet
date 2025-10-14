@@ -8,7 +8,7 @@ from sqlalchemy import inspect, text, select
 from sqlalchemy.exc import NoResultFound
 
 from models import db, User, CommissionPool, TransferHistory, Notification
-from forms import RegisterForm, LoginForm, TransferForm, NotificationForm
+from forms import RegisterForm, LoginForm, TransferForm
 
 
 def mysql_url_from_railway():
