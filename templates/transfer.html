@@ -4,18 +4,14 @@
   <div class="col-md-5">
     <h3>Para Gönder</h3>
     <p>Mevcut bakiye: {{ "%.2f"|format(current_user.balance) }} SRDS</p>
-
     <form method="post" novalidate>
       {{ form.hidden_tag() }}
 
       <div class="mb-3">
         {{ form.to_email.label(class="form-label") }}
         <div class="input-group">
-          {{ form.to_email(class="form-control", id="toEmail") }}
-          <button class="btn btn-outline-secondary" type="button"
-                  data-bs-toggle="modal" data-bs-target="#qrModal">
-            QR ile Oku
-          </button>
+          {{ form.to_email(class="form-control", id="to_email") }}
+          <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#qrModal" aria-label="QR Oku">QR</button>
         </div>
       </div>
 
@@ -42,85 +38,60 @@
         <h5 class="modal-title" id="qrModalLabel">QR Kodunu Tara</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
       </div>
-      <div class="modal-body text-center">
-        <video id="qrVideo" autoplay playsinline style="width:100%; max-height:320px; background:#000;"></video>
-        <canvas id="qrCanvas" style="display:none;"></canvas>
-        <div class="small text-muted mt-2">Kamerayı e-postayı içeren QR koda yöneltin.</div>
-        <div id="qrError" class="text-danger small mt-2" style="display:none;"></div>
-      </div>
-      <div class="modal-footer">
-        <button id="stopScanBtn" type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+      <div class="modal-body">
+        <div id="qr-reader" style="width:100%"></div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- jsQR -->
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
-  (function() {
-    const video = document.getElementById('qrVideo');
-    const canvas = document.getElementById('qrCanvas');
-    const ctx = canvas.getContext('2d');
-    const toEmail = document.getElementById('toEmail');
-    const errBox = document.getElementById('qrError');
+(function(){
+  let html5QrCode = null;
 
-    let stream = null;
-    let rafId = null;
-    let modalEl = document.getElementById('qrModal');
-    let bsModal = null;
+  const parseEmail = (text) => {
+    // mailto:foo@bar.com veya düz e-posta destekle
+    let t = (text || "").trim();
+    if (t.toLowerCase().startsWith("mailto:")) t = t.slice(7);
+    // basit doğrulama
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(t) ? t : null;
+  };
 
-    function stopStream() {
-      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-        stream = null;
+  const startScanner = () => {
+    const el = document.getElementById('qr-reader');
+    html5QrCode = new Html5Qrcode(/* element id or element */ "qr-reader");
+    const config = { fps: 10, qrbox: 250, experimentalFeatures: { useBarCodeDetectorIfSupported: true } };
+    const constraints = { facingMode: { ideal: "environment" } }; // mobil arka kamera
+
+    html5QrCode.start(constraints, config, (decodedText) => {
+      const email = parseEmail(decodedText);
+      if (email) {
+        document.getElementById('to_email').value = email;
+        stopScanner();
+        // modal kapat
+        const modalEl = document.getElementById('qrModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal && modal.hide();
       }
+    }).catch(() => {
+      // kamera başlatılamazsa sessiz geç
+    });
+  };
+
+  const stopScanner = () => {
+    if (html5QrCode) {
+      html5QrCode.stop().then(() => {
+        html5QrCode.clear();
+        html5QrCode = null;
+      }).catch(() => {});
     }
+  };
 
-    function scanLoop() {
-      if (!video.videoWidth) { rafId = requestAnimationFrame(scanLoop); return; }
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
-      if (code && code.data) {
-        const val = String(code.data).trim();
-        toEmail.value = val; // QR'daki metni direkt yaz
-        // Modal kapat
-        bsModal.hide();
-      } else {
-        rafId = requestAnimationFrame(scanLoop);
-      }
-    }
-
-    modalEl.addEventListener('shown.bs.modal', async () => {
-      errBox.style.display = 'none';
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
-          audio: false
-        });
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          video.play();
-          scanLoop();
-        };
-      } catch (e) {
-        errBox.textContent = "Kamera erişimi başarısız: " + (e.message || e);
-        errBox.style.display = 'block';
-      }
-    });
-
-    modalEl.addEventListener('hidden.bs.modal', () => {
-      stopStream();
-    });
-
-    // Bootstrap modal instance
-    document.addEventListener('DOMContentLoaded', () => {
-      bsModal = new bootstrap.Modal(modalEl);
-    });
-  })();
+  // Modal açılınca başlat, kapanınca durdur
+  const modalEl = document.getElementById('qrModal');
+  modalEl.addEventListener('shown.bs.modal', startScanner);
+  modalEl.addEventListener('hide.bs.modal', stopScanner);
+})();
 </script>
 {% endblock %}
