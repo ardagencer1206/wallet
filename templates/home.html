@@ -3,6 +3,7 @@
   <h3>Hoş geldiniz</h3>
   {% if current_user.is_authenticated %}
     <p>Giriş yapıldı: {{ current_user.email }}</p>
+    <p>Bakiye: {{ "%.2f"|format(current_user.balance) }} SRDS</p>
   {% else %}
     <p>Lütfen kayıt olun veya giriş yapın.</p>
   {% endif %}
