@@ -31,3 +31,16 @@ class TransferHistory(db.Model):
     commission = db.Column(db.Numeric(18, 2), nullable=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    receiver_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    amount = db.Column(db.Numeric(18,2), nullable=False)
+    message = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+
+    sender = db.relationship("User", foreign_keys=[sender_id])
+    receiver = db.relationship("User", foreign_keys=[receiver_id])
+
+
