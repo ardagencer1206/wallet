@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+  <h3>Hoş geldiniz</h3>
+  {% if current_user.is_authenticated %}
+    <p>Giriş yapıldı: {{ current_user.email }}</p>
+  {% else %}
+    <p>Lütfen kayıt olun veya giriş yapın.</p>
+  {% endif %}
+{% endblock %}
