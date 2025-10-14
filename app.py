@@ -2,8 +2,10 @@ import os
 from flask import Flask, render_template, redirect, url_for, flash, request
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from models import db, User
-from forms import RegisterForm, LoginForm
+from forms import RegisterForm, LoginForm, TransferForm
 from sqlalchemy import inspect, text   # eklendi
+from sqlalchemy.exc import NoResultFound
+from decimal import Decimal
 
 def mysql_url_from_railway():
     host = os.getenv("MYSQLHOST")
@@ -76,6 +78,52 @@ def create_app():
                 return redirect(request.args.get("next") or url_for("home"))
             flash("Geçersiz bilgiler.", "danger")
         return render_template("login.html", form=form)
+    
+    @app.route("/transfer", methods=["GET","POST"])
+    @login_required
+    def transfer():
+        form = TransferForm()
+        if form.validate_on_submit():
+            to_email = form.to_email.data.strip().lower()
+            amount = (form.amount.data or Decimal("0")).quantize(Decimal("0.01"))
+
+            if to_email == current_user.email.lower():
+                flash("Kendinize gönderemezsiniz.", "danger")
+                return redirect(url_for("transfer"))
+
+            to_user = User.query.filter_by(email=to_email).first()
+            if not to_user:
+                flash("Alıcı bulunamadı.", "danger")
+                return redirect(url_for("transfer"))
+
+            # Atomik işlem + satır kilidi
+            try:
+                from sqlalchemy import select
+                sender = db.session.execute(
+                    select(User).where(User.id == current_user.id).with_for_update()
+                ).scalar_one()
+                receiver = db.session.execute(
+                    select(User).where(User.id == to_user.id).with_for_update()
+                ).scalar_one()
+
+                if sender.balance < amount:
+                    flash("Bakiye yetersiz.", "danger")
+                    db.session.rollback()
+                    return redirect(url_for("transfer"))
+
+                sender.balance = (Decimal(sender.balance) - amount).quantize(Decimal("0.01"))
+                receiver.balance = (Decimal(receiver.balance) + amount).quantize(Decimal("0.01"))
+                db.session.commit()
+                flash(f"{to_email} adresine {amount} SRDS gönderildi.", "success")
+                return redirect(url_for("home"))
+            except NoResultFound:
+                db.session.rollback()
+                flash("İşlem sırasında kullanıcı bulunamadı.", "danger")
+            except Exception:
+                db.session.rollback()
+                flash("İşlem başarısız.", "danger")
+
+        return render_template("transfer.html", form=form)
 
     @app.route("/logout")
     @login_required
