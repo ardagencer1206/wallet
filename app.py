@@ -36,18 +36,26 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        # SQLAlchemy 2.x uyumlu
         return db.session.get(User, int(user_id))
 
     with app.app_context():
         db.create_all()
 
-        # balance sütunu yoksa ekle (MySQL'de user rezerve; backtick gerekli)
         inspector = inspect(db.engine)
+
+        # user.balance yoksa ekle
         cols = [c["name"] for c in inspector.get_columns("user")]
         if "balance" not in cols:
             db.session.execute(
                 text("ALTER TABLE `user` ADD COLUMN `balance` DECIMAL(18,2) NOT NULL DEFAULT 0.00")
+            )
+            db.session.commit()
+
+        # transfer_history.message yoksa ekle
+        cols = [c["name"] for c in inspector.get_columns("transfer_history")]
+        if "message" not in cols:
+            db.session.execute(
+                text("ALTER TABLE transfer_history ADD COLUMN message VARCHAR(500) NULL")
             )
             db.session.commit()
 
