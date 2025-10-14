@@ -1,17 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Gönderim Geçmişi{% endblock %}
+{% block content %}
 <h2>Gönderim Geçmişi</h2>
-<table>
+<table border="1" cellpadding="5">
   <tr>
     <th>Gönderilen</th>
-    <th>Tarih</th>
     <th>Miktar</th>
     <th>Komisyon</th>
+    <th>Tarih</th>
   </tr>
-  {% for r in records %}
+  {% for row in history %}
   <tr>
-    <td>{{ r.receiver_id }}</td> <!-- receiver email için User.query.get kullanabilirsin -->
-    <td>{{ r.created_at }}</td>
-    <td>{{ r.amount }}</td>
-    <td>{{ r.commission }}</td>
+    <td>{{ row.to_email }}</td>
+    <td>{{ "%.2f"|format(row.amount) }} SRDS</td>
+    <td>{{ "%.4f"|format(row.commission) }} SRDS</td>
+    <td>{{ row.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
   </tr>
   {% endfor %}
 </table>
+{% endblock %}
