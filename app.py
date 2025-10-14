@@ -9,7 +9,7 @@ from sqlalchemy.exc import NoResultFound
 
 from models import db, User, CommissionPool, TransferHistory, Notification
 from forms import RegisterForm, LoginForm, TransferForm
-
+from qrgenerate import generate_qr
 
 def mysql_url_from_railway():
     host = os.getenv("MYSQLHOST")
@@ -200,6 +200,15 @@ def create_app():
 
         return render_template("history.html", history=history_rows)
 
+    #qr generation
+    @app.route("/qr")
+    @login_required
+    def qr():
+        email = current_user.email
+        qr_code = generate_qr(email)  # base64 string
+        return render_template("qr.html", qr_code=qr_code, email=email)
+
+    
     @app.route("/notifications")
     @login_required
     def notifications():
