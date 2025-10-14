@@ -162,12 +162,27 @@ def create_app():
     @app.route("/history")
     @login_required
     def history():
-        records = TransferHistory.query.filter_by(sender_id=current_user.id).order_by(
-            TransferHistory.created_at.desc()
-        ).all()
-        return render_template("history.html", records=records)
+        from sqlalchemy import select, join
+    # Transfer tablosu ile User tablosunu birleştir
+        stmt = (
+            select(Transfer, User.email)
+            .join(User, User.id == Transfer.to_user_id)
+            .where(Transfer.from_user_id == current_user.id)
+            .order_by(Transfer.created_at.desc())
+        )
+        results = db.session.execute(stmt).all()
 
-    return app
+        history = []
+        for transfer, to_email in results:
+            history.append({
+                "to_email": to_email,
+                "amount": transfer.amount,
+                "commission": transfer.commission,
+                "created_at": transfer.created_at
+            })
+
+        return render_template("history.html", history=history)
+
 
 
 if __name__ == "__main__":
