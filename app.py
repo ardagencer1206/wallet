@@ -36,12 +36,13 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return db.session.get(User, int(user_id))  # yeni API ile
+        # SQLAlchemy 2.x uyumlu
+        return db.session.get(User, int(user_id))
 
     with app.app_context():
         db.create_all()
 
-        # balance sütunu yoksa ekle
+        # balance sütunu yoksa ekle (MySQL'de user rezerve; backtick gerekli)
         inspector = inspect(db.engine)
         cols = [c["name"] for c in inspector.get_columns("user")]
         if "balance" not in cols:
@@ -50,7 +51,7 @@ def create_app():
             )
             db.session.commit()
 
-        # Komisyon havuzu tek satır (id=1) oluştur
+        # Komisyon havuzu tek satır (id=1) yoksa oluştur
         if not db.session.get(CommissionPool, 1):
             db.session.add(CommissionPool(id=1, total=Decimal("0.00")))
             db.session.commit()
@@ -106,7 +107,7 @@ def create_app():
                 flash("Alıcı bulunamadı.", "danger")
                 return redirect(url_for("transfer"))
 
-            # Komisyon: %0.2 (1/500). Gönderen öder, alıcı net miktarı alır.
+            # Komisyon: %0.2 (1/500). Gönderen öder, alıcı net tutarı alır.
             fee = (amount / Decimal("500")).quantize(Decimal("0.01"))
             total_debit = (amount + fee).quantize(Decimal("0.01"))
 
@@ -126,7 +127,7 @@ def create_app():
                     db.session.rollback()
                     return redirect(url_for("transfer"))
 
-                # Bakiye güncelleme
+                # Bakiye güncelle
                 sender.balance = (Decimal(sender.balance) - total_debit).quantize(Decimal("0.01"))
                 receiver.balance = (Decimal(receiver.balance) + amount).quantize(Decimal("0.01"))
                 pool.total = (Decimal(pool.total) + fee).quantize(Decimal("0.01"))
@@ -137,15 +138,16 @@ def create_app():
                     receiver_id=receiver.id,
                     amount=amount,
                     commission=fee,
-                    message=form.message.data.strip() if form.message.data else None
+                    message=form.message.data.strip() if getattr(form, "message", None) and form.message.data else None
                 )
                 db.session.add(history)
+
                 # Bildirim kaydı
                 notif = Notification(
                     sender_id=sender.id,
                     receiver_id=receiver.id,
                     amount=amount,
-                    message=(form.message.data or "").strip() or None
+                    message=(form.message.data or "").strip() if getattr(form, "message", None) else None
                 )
                 db.session.add(notif)
 
@@ -179,17 +181,17 @@ def create_app():
         )
         results = db.session.execute(stmt).all()
 
-        history = []
+        history_rows = []
         for transfer, to_email in results:
-            history.append({
+            history_rows.append({
                 "to_email": to_email,
                 "amount": transfer.amount,
                 "commission": transfer.commission,
                 "created_at": transfer.created_at
             })
 
-        return render_template("history.html", history=history)
-        
+        return render_template("history.html", history=history_rows)
+
     @app.route("/notifications")
     @login_required
     def notifications():
@@ -200,18 +202,17 @@ def create_app():
             .order_by(Notification.created_at.desc())
             .all()
         )
-        data = []
+        rows = []
         for notif, sender_email in notifs:
-            data.append({
+            rows.append({
                 "from_email": sender_email,
                 "amount": notif.amount,
                 "message": notif.message,
                 "created_at": notif.created_at
             })
-        return render_template("notifications.html", notifications=data)
+        return render_template("notifications.html", notifications=rows)
 
-
-    return app  # <-- önemli
+    return app
 
 
 if __name__ == "__main__":
