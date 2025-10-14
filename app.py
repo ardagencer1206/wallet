@@ -140,6 +140,14 @@ def create_app():
                     message=form.message.data.strip() if form.message.data else None
                 )
                 db.session.add(history)
+                # Bildirim kaydı
+               notif = Notification(
+                   sender_id=sender.id,
+                   receiver_id=receiver.id,
+                   amount=amount,
+                   message=(form.message.data or "").strip() or None
+               )
+               db.session.add(notif)
 
                 db.session.commit()
                 flash(f"{to_email} adresine {amount} SRDS gönderildi.", "success")
