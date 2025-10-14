@@ -36,12 +36,12 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.query.get(int(user_id))
+        return db.session.get(User, int(user_id))  # yeni API ile
 
     with app.app_context():
         db.create_all()
 
-        # balance sütunu yoksa ekle (MySQL'de user rezerve, backtick gerekli)
+        # balance sütunu yoksa ekle
         inspector = inspect(db.engine)
         cols = [c["name"] for c in inspector.get_columns("user")]
         if "balance" not in cols:
@@ -51,7 +51,7 @@ def create_app():
             db.session.commit()
 
         # Komisyon havuzu tek satır (id=1) oluştur
-        if not CommissionPool.query.get(1):
+        if not db.session.get(CommissionPool, 1):
             db.session.add(CommissionPool(id=1, total=Decimal("0.00")))
             db.session.commit()
 
@@ -147,9 +147,9 @@ def create_app():
             except NoResultFound:
                 db.session.rollback()
                 flash("İşlem sırasında kullanıcı bulunamadı.", "danger")
-            except Exception:
+            except Exception as e:
                 db.session.rollback()
-                flash("İşlem başarısız.", "danger")
+                flash(f"İşlem başarısız: {str(e)}", "danger")
 
         return render_template("transfer.html", form=form)
 
@@ -162,13 +162,11 @@ def create_app():
     @app.route("/history")
     @login_required
     def history():
-        from sqlalchemy import select, join
-    # Transfer tablosu ile User tablosunu birleştir
         stmt = (
-            select(Transfer, User.email)
-            .join(User, User.id == Transfer.to_user_id)
-            .where(Transfer.from_user_id == current_user.id)
-            .order_by(Transfer.created_at.desc())
+            select(TransferHistory, User.email)
+            .join(User, User.id == TransferHistory.receiver_id)
+            .where(TransferHistory.sender_id == current_user.id)
+            .order_by(TransferHistory.created_at.desc())
         )
         results = db.session.execute(stmt).all()
 
@@ -183,6 +181,7 @@ def create_app():
 
         return render_template("history.html", history=history)
 
+    return app  # <-- önemli
 
 
 if __name__ == "__main__":
