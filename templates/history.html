@@ -1,0 +1,17 @@
+<h2>Gönderim Geçmişi</h2>
+<table>
+  <tr>
+    <th>Gönderilen</th>
+    <th>Tarih</th>
+    <th>Miktar</th>
+    <th>Komisyon</th>
+  </tr>
+  {% for r in records %}
+  <tr>
+    <td>{{ r.receiver_id }}</td> <!-- receiver email için User.query.get kullanabilirsin -->
+    <td>{{ r.created_at }}</td>
+    <td>{{ r.amount }}</td>
+    <td>{{ r.commission }}</td>
+  </tr>
+  {% endfor %}
+</table>
