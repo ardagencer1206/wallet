@@ -1,11 +1,15 @@
 import os
+from decimal import Decimal
+
 from flask import Flask, render_template, redirect, url_for, flash, request
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
-from models import db, User
-from forms import RegisterForm, LoginForm, TransferForm
-from sqlalchemy import inspect, text   # eklendi
+
+from sqlalchemy import inspect, text, select
 from sqlalchemy.exc import NoResultFound
-from decimal import Decimal
+
+from models import db, User, CommissionPool
+from forms import RegisterForm, LoginForm, TransferForm
+
 
 def mysql_url_from_railway():
     host = os.getenv("MYSQLHOST")
@@ -16,6 +20,7 @@ def mysql_url_from_railway():
     if all([host, user, password, database]):
         return f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}?charset=utf8mb4"
     return os.getenv("DATABASE_URL", "mysql+pymysql://root:password@127.0.0.1:3306/appdb?charset=utf8mb4")
+
 
 def create_app():
     app = Flask(__name__)
@@ -36,20 +41,25 @@ def create_app():
     with app.app_context():
         db.create_all()
 
-        # balance sütunu yoksa tabloya ekle
+        # balance sütunu yoksa ekle (MySQL'de user rezerve, backtick gerekli)
         inspector = inspect(db.engine)
-        cols = [c['name'] for c in inspector.get_columns('user')]
-        if 'balance' not in cols:
+        cols = [c["name"] for c in inspector.get_columns("user")]
+        if "balance" not in cols:
             db.session.execute(
-                text("ALTER TABLE user ADD COLUMN balance DECIMAL(18,2) NOT NULL DEFAULT 0.00")
+                text("ALTER TABLE `user` ADD COLUMN `balance` DECIMAL(18,2) NOT NULL DEFAULT 0.00")
             )
+            db.session.commit()
+
+        # Komisyon havuzu tek satır (id=1) oluştur
+        if not CommissionPool.query.get(1):
+            db.session.add(CommissionPool(id=1, total=Decimal("0.00")))
             db.session.commit()
 
     @app.route("/")
     def home():
         return render_template("home.html")
 
-    @app.route("/register", methods=["GET","POST"])
+    @app.route("/register", methods=["GET", "POST"])
     def register():
         if current_user.is_authenticated:
             return redirect(url_for("home"))
@@ -66,7 +76,7 @@ def create_app():
             return redirect(url_for("login"))
         return render_template("register.html", form=form)
 
-    @app.route("/login", methods=["GET","POST"])
+    @app.route("/login", methods=["GET", "POST"])
     def login():
         if current_user.is_authenticated:
             return redirect(url_for("home"))
@@ -78,8 +88,8 @@ def create_app():
                 return redirect(request.args.get("next") or url_for("home"))
             flash("Geçersiz bilgiler.", "danger")
         return render_template("login.html", form=form)
-    
-    @app.route("/transfer", methods=["GET","POST"])
+
+    @app.route("/transfer", methods=["GET", "POST"])
     @login_required
     def transfer():
         form = TransferForm()
@@ -96,23 +106,30 @@ def create_app():
                 flash("Alıcı bulunamadı.", "danger")
                 return redirect(url_for("transfer"))
 
-            # Atomik işlem + satır kilidi
+            # Komisyon: 1/500 (0.2%). Gönderen öder. Alıcı tam tutarı alır.
+            fee = (amount / Decimal("500")).quantize(Decimal("0.01"))
+            total_debit = (amount + fee).quantize(Decimal("0.01"))
+
             try:
-                from sqlalchemy import select
                 sender = db.session.execute(
                     select(User).where(User.id == current_user.id).with_for_update()
                 ).scalar_one()
                 receiver = db.session.execute(
                     select(User).where(User.id == to_user.id).with_for_update()
                 ).scalar_one()
+                pool = db.session.execute(
+                    select(CommissionPool).where(CommissionPool.id == 1).with_for_update()
+                ).scalar_one()
 
-                if sender.balance < amount:
+                if sender.balance < total_debit:
                     flash("Bakiye yetersiz.", "danger")
                     db.session.rollback()
                     return redirect(url_for("transfer"))
 
-                sender.balance = (Decimal(sender.balance) - amount).quantize(Decimal("0.01"))
+                sender.balance = (Decimal(sender.balance) - total_debit).quantize(Decimal("0.01"))
                 receiver.balance = (Decimal(receiver.balance) + amount).quantize(Decimal("0.01"))
+                pool.total = (Decimal(pool.total) + fee).quantize(Decimal("0.01"))
+
                 db.session.commit()
                 flash(f"{to_email} adresine {amount} SRDS gönderildi.", "success")
                 return redirect(url_for("home"))
@@ -132,6 +149,7 @@ def create_app():
         return redirect(url_for("home"))
 
     return app
+
 
 if __name__ == "__main__":
     app = create_app()
