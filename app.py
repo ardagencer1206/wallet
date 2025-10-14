@@ -7,8 +7,8 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 from sqlalchemy import inspect, text, select
 from sqlalchemy.exc import NoResultFound
 
-from models import db, User, CommissionPool, TransferHistory
-from forms import RegisterForm, LoginForm, TransferForm
+from models import db, User, CommissionPool, TransferHistory, Notification
+from forms import RegisterForm, LoginForm, TransferForm, NotificationForm
 
 
 def mysql_url_from_railway():
@@ -137,6 +137,7 @@ def create_app():
                     receiver_id=receiver.id,
                     amount=amount,
                     commission=fee,
+                    message=form.message.data.strip() if form.message.data else None
                 )
                 db.session.add(history)
 
@@ -180,6 +181,27 @@ def create_app():
             })
 
         return render_template("history.html", history=history)
+        
+    @app.route("/notifications")
+    @login_required
+    def notifications():
+        notifs = (
+            db.session.query(Notification, User.email)
+            .join(User, User.id == Notification.sender_id)
+            .filter(Notification.receiver_id == current_user.id)
+            .order_by(Notification.created_at.desc())
+            .all()
+        )
+        data = []
+        for notif, sender_email in notifs:
+            data.append({
+                "from_email": sender_email,
+                "amount": notif.amount,
+                "message": notif.message,
+                "created_at": notif.created_at
+            })
+        return render_template("notifications.html", notifications=data)
+
 
     return app  # <-- önemli
 
