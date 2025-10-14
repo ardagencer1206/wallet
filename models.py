@@ -18,3 +18,8 @@ class User(UserMixin, db.Model):
 
     def check_password(self, raw_password):
         return check_password_hash(self.password_hash, raw_password)
+
+class CommissionPool(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    total = db.Column(db.Numeric(18, 2), nullable=False, server_default="0.00")
+
