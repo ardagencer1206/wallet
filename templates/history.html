@@ -1,21 +1,80 @@
 {% extends "base.html" %}
 {% block title %}Gönderim Geçmişi{% endblock %}
 {% block content %}
-<h2>Gönderim Geçmişi</h2>
-<table border="1" cellpadding="5">
-  <tr>
-    <th>Gönderilen</th>
-    <th>Miktar</th>
-    <th>Komisyon</th>
-    <th>Tarih</th>
-  </tr>
-  {% for row in history %}
-  <tr>
-    <td>{{ row.to_email }}</td>
-    <td>{{ "%.2f"|format(row.amount) }} SRDS</td>
-    <td>{{ "%.4f"|format(row.commission) }} SRDS</td>
-    <td>{{ row.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
-  </tr>
-  {% endfor %}
-</table>
+
+<style>
+  .glass {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    border-radius: 1rem;
+  }
+  .dash-bg {
+    background: linear-gradient(135deg, #0f172a, #111827 60%, #0b1020);
+    min-height: 100vh;
+    padding: 3rem 0;
+  }
+  .section-title { color: #e5e7eb; font-weight: 700; }
+  .table-modern {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .table-modern th {
+    text-align: left;
+    padding: 1rem;
+    background: rgba(255,255,255,.08);
+    color: #f3f4f6;
+    font-weight: 600;
+    font-size: .9rem;
+  }
+  .table-modern td {
+    padding: 1rem;
+    border-top: 1px solid rgba(255,255,255,.15);
+    color: #e5e7eb;
+    font-size: .95rem;
+  }
+  .table-modern tr:hover td {
+    background: rgba(255,255,255,.05);
+  }
+  .amount-positive { color: #34d399; font-weight: 600; }
+  .amount-commission { color: #fbbf24; font-weight: 600; font-size: .85rem; }
+  .muted { color: #9ca3af; font-size: .85rem; }
+</style>
+
+<div class="dash-bg">
+  <div class="container">
+    <div class="glass p-4 p-md-5">
+      <h2 class="section-title mb-4">Gönderim Geçmişi</h2>
+      <div class="table-responsive">
+        <table class="table-modern">
+          <thead>
+            <tr>
+              <th>Gönderilen</th>
+              <th>Miktar</th>
+              <th>Komisyon</th>
+              <th>Tarih</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in history %}
+            <tr>
+              <td>{{ row.to_email }}</td>
+              <td><span class="amount-positive">{{ "%.2f"|format(row.amount) }} SRDS</span></td>
+              <td><span class="amount-commission">{{ "%.4f"|format(row.commission) }} SRDS</span></td>
+              <td><span class="muted">{{ row.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</span></td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="text-center muted py-4">Henüz gönderim geçmişiniz bulunmamaktadır.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
