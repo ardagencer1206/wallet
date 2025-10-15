@@ -1,29 +1,81 @@
 {% extends "base.html" %}
+{% block title %}Bildirimler{% endblock %}
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-3">
-  <h3>Bildirimler</h3>
+
+<style>
+  .glass {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    border-radius: 1rem;
+  }
+  .dash-bg {
+    background: linear-gradient(135deg, #0f172a, #111827 60%, #0b1020);
+    min-height: 100vh;
+    padding: 3rem 0;
+  }
+  .section-title { color: #e5e7eb; font-weight: 700; }
+  .table-modern {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .table-modern th {
+    text-align: left;
+    padding: 1rem;
+    background: rgba(255,255,255,.08);
+    color: #f3f4f6;
+    font-weight: 600;
+    font-size: .9rem;
+  }
+  .table-modern td {
+    padding: 1rem;
+    border-top: 1px solid rgba(255,255,255,.15);
+    color: #e5e7eb;
+    font-size: .95rem;
+  }
+  .table-modern tr:hover td {
+    background: rgba(255,255,255,.05);
+  }
+  .amount { color: #34d399; font-weight: 600; }
+  .muted { color: #9ca3af; font-size: .85rem; }
+</style>
+
+<div class="dash-bg">
+  <div class="container">
+    <div class="glass p-4 p-md-5">
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <h2 class="section-title">Bildirimler</h2>
+      </div>
+      <div class="table-responsive">
+        <table class="table-modern">
+          <thead>
+            <tr>
+              <th>Gönderen</th>
+              <th>Miktar</th>
+              <th>Mesaj</th>
+              <th>Tarih</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for n in notifications %}
+              <tr>
+                <td>{{ n.from_email }}</td>
+                <td><span class="amount">{{ "%.2f"|format(n.amount) }} SRDS</span></td>
+                <td>{{ n.message or "-" }}</td>
+                <td><span class="muted">{{ n.created_at.strftime("%Y-%m-%d %H:%M:%S") if n.created_at else "" }}</span></td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="4" class="text-center muted py-4">Henüz bildiriminiz bulunmamaktadır.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
-<table class="table table-striped table-bordered">
-  <thead>
-    <tr>
-      <th>Gönderen</th>
-      <th>Miktar</th>
-      <th>Mesaj</th>
-      <th>Tarih</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for n in notifications %}
-      <tr>
-        <td>{{ n.from_email }}</td>
-        <td>{{ "%.2f"|format(n.amount) }} SRDS</td>
-        <td>{{ n.message or "-" }}</td>
-        <td>{{ n.created_at.strftime("%Y-%m-%d %H:%M:%S") if n.created_at else "" }}</td>
-      </tr>
-    {% else %}
-      <tr><td colspan="4" class="text-center">Bildirim yok.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
 {% endblock %}
