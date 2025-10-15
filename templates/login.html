@@ -1,20 +1,75 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-5">
-    <h3>Giriş Yap</h3>
-    <form method="post" novalidate>
-      {{ form.hidden_tag() }}
-      <div class="mb-3">
-        {{ form.email.label(class="form-label") }}
-        {{ form.email(class="form-control") }}
+
+<style>
+  .auth-wrap {
+    min-height: calc(100vh - 120px);
+    display: grid;
+    place-items: center;
+    background: radial-gradient(1200px 600px at 10% -10%, rgba(99,102,241,.25), transparent),
+                radial-gradient(1200px 600px at 110% 110%, rgba(16,185,129,.25), transparent);
+    border-radius: 1rem;
+  }
+  .glass-card {
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
+    border: 1px solid rgba(255,255,255,0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    .glass-card { background: rgba(15,15,20,0.55); }
+  }
+</style>
+
+<div class="auth-wrap">
+  <div class="col-11 col-sm-9 col-md-6 col-lg-4">
+    <div class="card glass-card shadow-lg rounded-4">
+      <div class="card-body p-4 p-md-5">
+
+        <div class="text-center mb-4">
+          <div class="fw-semibold text-uppercase small text-muted">SRDS Wallet</div>
+          <h3 class="mb-1">Giriş Yap</h3>
+          <p class="text-secondary mb-0">Hesabınıza erişin ve işlemlerinizi yönetin.</p>
+        </div>
+
+        <form method="post" novalidate>
+          {{ form.hidden_tag() }}
+
+          <div class="form-floating mb-3">
+            {{ form.email(class="form-control rounded-3", id="email", placeholder="email@example.com", autocomplete="email") }}
+            <label for="email">Email</label>
+            {% if form.email.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.email.errors[0] }}
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="form-floating mb-4">
+            {{ form.password(class="form-control rounded-3", id="password", placeholder="••••••••", autocomplete="current-password") }}
+            <label for="password">Şifre</label>
+            {% if form.password.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.password.errors[0] }}
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="d-grid gap-2">
+            {{ form.submit(class="btn btn-primary btn-lg rounded-3") }}
+          </div>
+        </form>
+
+        <hr class="my-4 opacity-25">
+
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="text-secondary">Hesabın yok mu?</span>
+          <a class="btn btn-outline-primary rounded-3" href="{{ url_for('register') }}">Kayıt Ol</a>
+        </div>
+
       </div>
-      <div class="mb-3">
-        {{ form.password.label(class="form-label") }}
-        {{ form.password(class="form-control") }}
-      </div>
-      {{ form.submit(class="btn btn-primary") }}
-    </form>
+    </div>
   </div>
 </div>
+
 {% endblock %}
