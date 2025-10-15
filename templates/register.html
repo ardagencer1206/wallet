@@ -1,20 +1,88 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-5">
-    <h3>Kayıt Ol</h3>
-    <form method="post" novalidate>
-      {{ form.hidden_tag() }}
-      <div class="mb-3">
-        {{ form.email.label(class="form-label") }}
-        {{ form.email(class="form-control") }}
+
+<style>
+  .glass {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    border-radius: 1rem;
+  }
+  .auth-bg {
+    background: radial-gradient(1200px 1200px at 10% -10%, #7c4dff33, transparent 60%),
+                radial-gradient(1000px 800px at 110% 10%, #00e5ff33, transparent 55%),
+                linear-gradient(135deg, #0f172a, #111827 60%, #0b1020);
+  }
+  .form-control {
+    background-color: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.25);
+    color: #e5e7eb;
+  }
+  .form-control:focus {
+    background-color: rgba(255,255,255,0.12);
+    border-color: #8b5cf6;
+    color: #fff;
+    box-shadow: 0 0 0 .25rem rgba(139,92,246,.25);
+  }
+  label { color: #cbd5e1; }
+  .brand-badge {
+    width: 56px; height: 56px;
+    border-radius: 14px;
+    display: grid; place-items: center;
+    background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+    color: #fff; font-weight: 700;
+    box-shadow: 0 8px 24px rgba(99,102,241,0.35);
+  }
+  .btn-gradient {
+    background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+    border: 0; color: #0b1020;
+    font-weight: 600;
+  }
+  .btn-gradient:hover { opacity: .95; }
+  .helper a { color: #93c5fd; text-decoration: none; }
+  .helper a:hover { text-decoration: underline; }
+</style>
+
+<div class="auth-bg min-vh-100 d-flex align-items-center py-5">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-sm-10 col-md-8 col-lg-5">
+        <div class="glass p-4 p-md-5">
+          <div class="d-flex align-items-center gap-3 mb-4">
+            <div class="brand-badge">SR</div>
+            <div>
+              <h1 class="h4 m-0 text-white">SRDS Wallet</h1>
+              <small class="text-secondary">Yeni hesap oluştur</small>
+            </div>
+          </div>
+
+          <form method="post" novalidate class="mt-3">
+            {{ form.hidden_tag() }}
+
+            <div class="mb-3">
+              {{ form.email.label(class="form-label") }}
+              {{ form.email(class="form-control", placeholder="ornek@eposta.com") }}
+            </div>
+
+            <div class="mb-2">
+              {{ form.password.label(class="form-label") }}
+              {{ form.password(class="form-control", placeholder="••••••••") }}
+            </div>
+
+            <div class="d-grid mt-4">
+              {{ form.submit(class="btn btn-gradient btn-lg") }}
+            </div>
+          </form>
+
+          <div class="helper mt-4 d-flex justify-content-between">
+            <small class="text-secondary">Zaten hesabın var mı? <a href="{{ url_for('login') }}">Giriş yap</a></small>
+            <small class="text-secondary"><a href="{{ url_for('home') }}">Ana sayfa</a></small>
+          </div>
+        </div>
       </div>
-      <div class="mb-3">
-        {{ form.password.label(class="form-label") }}
-        {{ form.password(class="form-control") }}
-      </div>
-      {{ form.submit(class="btn btn-primary") }}
-    </form>
+    </div>
   </div>
 </div>
 {% endblock %}
