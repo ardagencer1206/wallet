@@ -62,6 +62,21 @@ class Notification(db.Model):
     receiver_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     amount = db.Column(db.Numeric(18, 2), nullable=False)
     message = db.Column(db.String(255), nullable=True)
+
+
+class ExchangeHistory(db.Model):
+    __tablename__ = "exchange_history"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    side = db.Column(db.String(4), nullable=False)  # BUY / SELL
+    amount_try = db.Column(db.Numeric(18, 2), nullable=False)      # kullanıcının ödediği/aldığı TRY
+    amount_srds = db.Column(db.Numeric(18, 8), nullable=False)     # aldığı/sattığı SRDS (8 hane tutuyoruz)
+    fee_srds = db.Column(db.Numeric(18, 8), nullable=False)        # havuza giden komisyon (SRDS)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+
+    user = db.relationship("User", foreign_keys=[user_id])
+
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
     sender = db.relationship("User", foreign_keys=[sender_id])
