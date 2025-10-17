@@ -35,6 +35,13 @@ class CirculatingSupply(db.Model):
     total = db.Column(db.Numeric(20, 2), nullable=False, server_default="0.00")
 
 
+class SrdsValue(db.Model):
+    __tablename__ = "srds_value"
+
+    id = db.Column(db.Integer, primary_key=True)
+    value = db.Column(db.Numeric(20, 8), nullable=False, server_default="0.00")  # oranı daha hassas tut
+
+
 class TransferHistory(db.Model):
     __tablename__ = "transfer_history"
 
