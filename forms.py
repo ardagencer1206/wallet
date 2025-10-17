@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField, DecimalField, TextAreaField
+from wtforms import StringField, PasswordField, SubmitField, DecimalField, TextAreaField, SelectField
 from wtforms.validators import DataRequired, Email, Length, Optional, NumberRange
 
 
@@ -20,3 +20,13 @@ class TransferForm(FlaskForm):
     amount = DecimalField("Miktar (SRDS)", places=2, validators=[DataRequired(), NumberRange(min=0.01)])
     message = TextAreaField("Mesaj", validators=[Optional()])
     submit = SubmitField("Gönder")
+
+
+class ExchangeForm(FlaskForm):
+    action = SelectField(
+        "İşlem",
+        choices=[("BUY", "TRY → SRDS (Satın Al)"), ("SELL", "SRDS → TRY (Sat)")],
+        validators=[DataRequired()],
+    )
+    amount = DecimalField("Tutar", places=2, validators=[DataRequired(), NumberRange(min=0.01)])
+    submit = SubmitField("Onayla")
