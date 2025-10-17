@@ -62,6 +62,17 @@ def create_app():
             )
             db.session.commit()
 
+
+
+        # user.try_balance yoksa ekle
+        cols = [c["name"] for c in inspector.get_columns("user")]
+        if "try_balance" not in cols:
+            db.session.execute(
+                text("ALTER TABLE `user` ADD COLUMN `try_balance` DECIMAL(18,2) NOT NULL DEFAULT 0.00")
+            )
+            db.session.commit()
+
+
         # transfer_history.message yoksa ekle
         cols = [c["name"] for c in inspector.get_columns("transfer_history")]
         if "message" not in cols:
