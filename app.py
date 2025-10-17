@@ -7,7 +7,10 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 from sqlalchemy import inspect, text, select, func
 from sqlalchemy.exc import NoResultFound
 
-from models import db, User, CommissionPool, TransferHistory, Notification, CirculatingSupply, SrdsValue
+from models import (
+    db, User, CommissionPool, TransferHistory, Notification,
+    CirculatingSupply, SrdsValue
+)
 from forms import RegisterForm, LoginForm, TransferForm
 from qrgenerate import generate_qr
 
@@ -50,6 +53,21 @@ def create_app():
             cs.total = Decimal(total).quantize(Decimal("0.01"))
         db.session.commit()
 
+    def upsert_srds_value():
+        """user id=11 try_balance / circulating_supply"""
+        kasa = db.session.get(User, 11) or User.query.filter_by(email="sardisiumkasasi@gmail.com").first()
+        circ = db.session.get(CirculatingSupply, 1)
+        value = Decimal("0")
+        if kasa and circ and Decimal(circ.total or 0) > 0:
+            value = (Decimal(kasa.try_balance or 0) / Decimal(circ.total)).quantize(Decimal("0.00000001"))
+        row = SrdsValue.query.first()
+        if row:
+            row.value = value
+        else:
+            db.session.add(SrdsValue(value=value))
+        db.session.commit()
+        return value
+
     with app.app_context():
         db.create_all()
         inspector = inspect(db.engine)
@@ -57,41 +75,56 @@ def create_app():
         # user.balance yoksa ekle
         cols = [c["name"] for c in inspector.get_columns("user")]
         if "balance" not in cols:
-            db.session.execute(
-                text("ALTER TABLE `user` ADD COLUMN `balance` DECIMAL(18,2) NOT NULL DEFAULT 0.00")
-            )
+            db.session.execute(text(
+                "ALTER TABLE `user` ADD COLUMN `balance` DECIMAL(18,2) NOT NULL DEFAULT 0.00"
+            ))
             db.session.commit()
-
-
 
         # user.try_balance yoksa ekle
         cols = [c["name"] for c in inspector.get_columns("user")]
         if "try_balance" not in cols:
-            db.session.execute(
-                text("ALTER TABLE `user` ADD COLUMN `try_balance` DECIMAL(18,2) NOT NULL DEFAULT 0.00")
-            )
+            db.session.execute(text(
+                "ALTER TABLE `user` ADD COLUMN `try_balance` DECIMAL(18,2) NOT NULL DEFAULT 0.00"
+            ))
             db.session.commit()
-
 
         # transfer_history.message yoksa ekle
         cols = [c["name"] for c in inspector.get_columns("transfer_history")]
         if "message" not in cols:
-            db.session.execute(
-                text("ALTER TABLE `transfer_history` ADD COLUMN `message` VARCHAR(500) NULL")
-            )
+            db.session.execute(text(
+                "ALTER TABLE `transfer_history` ADD COLUMN `message` VARCHAR(500) NULL"
+            ))
             db.session.commit()
 
-        # Komisyon havuzu init
+        # Komisyon havuzu
         if not db.session.get(CommissionPool, 1):
             db.session.add(CommissionPool(id=1, total=Decimal("0.00")))
             db.session.commit()
 
-        # CirculatingSupply init + ilk hesap
+        # CirculatingSupply init + hesap
         if not db.session.get(CirculatingSupply, 1):
             db.session.add(CirculatingSupply(id=1, total=Decimal("0.00")))
             db.session.commit()
         recalc_supply()
 
+        # srds_value satırı yoksa oluştur ve güncelle
+        if not SrdsValue.query.first():
+            db.session.add(SrdsValue(value=Decimal("0")))
+            db.session.commit()
+        upsert_srds_value()
+
+    # Tüm şablonlara srds_value enjekte et
+    @app.context_processor
+    def inject_srds_value():
+        try:
+            val = upsert_srds_value()
+        except Exception:
+            db.session.rollback()
+            row = SrdsValue.query.first()
+            val = row.value if row else Decimal("0")
+        return {"srds_value": val}
+
+    # -------- Routes --------
     @app.route("/")
     def home():
         return render_template("home.html")
@@ -109,7 +142,6 @@ def create_app():
             user.set_password(form.password.data)
             db.session.add(user)
             db.session.commit()
-            # yeni kullanıcı bakiyesi 0.00 ⇒ supply değişmez
             flash("Kayıt başarılı. Giriş yapın.", "success")
             return redirect(url_for("login"))
         return render_template("register.html", form=form)
@@ -144,7 +176,6 @@ def create_app():
                 flash("Alıcı bulunamadı.", "danger")
                 return redirect(url_for("transfer"))
 
-            # Komisyon: %0.2 (1/500)
             fee = (amount / Decimal("500")).quantize(Decimal("0.01"))
             total_debit = (amount + fee).quantize(Decimal("0.01"))
 
@@ -164,40 +195,39 @@ def create_app():
                     db.session.rollback()
                     return redirect(url_for("transfer"))
 
-                # Bakiye güncelle
                 sender.balance = (Decimal(sender.balance) - total_debit).quantize(Decimal("0.01"))
                 receiver.balance = (Decimal(receiver.balance) + amount).quantize(Decimal("0.01"))
                 pool.total = (Decimal(pool.total) + fee).quantize(Decimal("0.01"))
 
-                # Geçmiş
                 history = TransferHistory(
                     sender_id=sender.id,
                     receiver_id=receiver.id,
                     amount=amount,
                     commission=fee,
-                    message=form.message.data.strip() if getattr(form, "message", None) and form.message.data else None
+                    message=(form.message.data or "").strip() if getattr(form, "message", None) else None,
                 )
                 db.session.add(history)
 
-                # Bildirim
                 notif = Notification(
                     sender_id=sender.id,
                     receiver_id=receiver.id,
                     amount=amount,
-                    message=(form.message.data or "").strip() if getattr(form, "message", None) else None
+                    message=(form.message.data or "").strip() if getattr(form, "message", None) else None,
                 )
                 db.session.add(notif)
 
-                # Circulating supply cache: komisyon kadar azalır
                 cs = db.session.get(CirculatingSupply, 1)
                 if cs:
                     cs.total = (Decimal(cs.total) - fee).quantize(Decimal("0.01"))
                 else:
-                    # güvenlik: tutarsızlıkta yeniden hesapla
                     total = db.session.query(func.coalesce(func.sum(User.balance), 0)).scalar() or 0
                     db.session.add(CirculatingSupply(id=1, total=Decimal(total).quantize(Decimal("0.01"))))
 
                 db.session.commit()
+
+                # komisyon sonrası değer güncelle
+                upsert_srds_value()
+
                 flash(f"{to_email} adresine {amount} SRDS gönderildi.", "success")
                 return redirect(url_for("home"))
 
@@ -226,23 +256,19 @@ def create_app():
             .order_by(TransferHistory.created_at.desc())
         )
         results = db.session.execute(stmt).all()
-
-        history_rows = []
-        for transfer, to_email in results:
-            history_rows.append({
-                "to_email": to_email,
-                "amount": transfer.amount,
-                "commission": transfer.commission,
-                "created_at": transfer.created_at
-            })
-
+        history_rows = [{
+            "to_email": to_email,
+            "amount": transfer.amount,
+            "commission": transfer.commission,
+            "created_at": transfer.created_at
+        } for transfer, to_email in results]
         return render_template("history.html", history=history_rows)
 
     @app.route("/qr")
     @login_required
     def qr():
         email = current_user.email
-        qr_code = generate_qr(email)  # base64
+        qr_code = generate_qr(email)
         return render_template("qr.html", qr_code=qr_code, email=email)
 
     @app.route("/notifications")
@@ -255,33 +281,15 @@ def create_app():
             .order_by(Notification.created_at.desc())
             .all()
         )
-        rows = []
-        for notif, sender_email in notifs:
-            rows.append({
-                "from_email": sender_email,
-                "amount": notif.amount,
-                "message": notif.message,
-                "created_at": notif.created_at
-            })
+        rows = [{
+            "from_email": sender_email,
+            "amount": notif.amount,
+            "message": notif.message,
+            "created_at": notif.created_at
+        } for notif, sender_email in notifs]
         return render_template("notifications.html", notifications=rows)
 
     return app
-
-    @app.route("/")
-    @login_required
-    def home():
-    # User id 11'i bul
-        kasa_user = User.query.get(11)
-        circulating = CirculatingSupply.query.first()
-
-        srds_value = 0
-        if kasa_user and circulating and circulating.total > 0:
-            srds_value = float(kasa_user.try_balance) / float(circulating.total)
-
-        return render_template("home.html",
-                               srds_value=srds_value,
-                               current_user=current_user)
-
 
 
 if __name__ == "__main__":
