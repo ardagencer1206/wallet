@@ -267,6 +267,22 @@ def create_app():
 
     return app
 
+    @app.route("/")
+    @login_required
+    def home():
+    # User id 11'i bul
+        kasa_user = User.query.get(11)
+        circulating = CirculatingSupply.query.first()
+
+        srds_value = 0
+        if kasa_user and circulating and circulating.total > 0:
+            srds_value = float(kasa_user.try_balance) / float(circulating.total)
+
+        return render_template("home.html",
+                               srds_value=srds_value,
+                               current_user=current_user)
+
+
 
 if __name__ == "__main__":
     app = create_app()
