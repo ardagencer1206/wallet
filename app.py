@@ -7,7 +7,7 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 from sqlalchemy import inspect, text, select, func
 from sqlalchemy.exc import NoResultFound
 
-from models import db, User, CommissionPool, TransferHistory, Notification, CirculatingSupply
+from models import db, User, CommissionPool, TransferHistory, Notification, CirculatingSupply, SrdsValue
 from forms import RegisterForm, LoginForm, TransferForm
 from qrgenerate import generate_qr
 
