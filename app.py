@@ -4,12 +4,13 @@ from decimal import Decimal
 from flask import Flask, render_template, redirect, url_for, flash, request
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 
-from sqlalchemy import inspect, text, select
+from sqlalchemy import inspect, text, select, func
 from sqlalchemy.exc import NoResultFound
 
-from models import db, User, CommissionPool, TransferHistory, Notification
+from models import db, User, CommissionPool, TransferHistory, Notification, CirculatingSupply
 from forms import RegisterForm, LoginForm, TransferForm
 from qrgenerate import generate_qr
+
 
 def mysql_url_from_railway():
     host = os.getenv("MYSQLHOST")
@@ -38,9 +39,19 @@ def create_app():
     def load_user(user_id):
         return db.session.get(User, int(user_id))
 
+    # ---- helpers ----
+    def recalc_supply():
+        total = db.session.query(func.coalesce(func.sum(User.balance), 0)).scalar() or 0
+        cs = db.session.get(CirculatingSupply, 1)
+        if not cs:
+            cs = CirculatingSupply(id=1, total=Decimal(total))
+            db.session.add(cs)
+        else:
+            cs.total = Decimal(total).quantize(Decimal("0.01"))
+        db.session.commit()
+
     with app.app_context():
         db.create_all()
-
         inspector = inspect(db.engine)
 
         # user.balance yoksa ekle
@@ -55,14 +66,20 @@ def create_app():
         cols = [c["name"] for c in inspector.get_columns("transfer_history")]
         if "message" not in cols:
             db.session.execute(
-                text("ALTER TABLE transfer_history ADD COLUMN message VARCHAR(500) NULL")
+                text("ALTER TABLE `transfer_history` ADD COLUMN `message` VARCHAR(500) NULL")
             )
             db.session.commit()
 
-        # Komisyon havuzu tek satır (id=1) yoksa oluştur
+        # Komisyon havuzu init
         if not db.session.get(CommissionPool, 1):
             db.session.add(CommissionPool(id=1, total=Decimal("0.00")))
             db.session.commit()
+
+        # CirculatingSupply init + ilk hesap
+        if not db.session.get(CirculatingSupply, 1):
+            db.session.add(CirculatingSupply(id=1, total=Decimal("0.00")))
+            db.session.commit()
+        recalc_supply()
 
     @app.route("/")
     def home():
@@ -81,6 +98,7 @@ def create_app():
             user.set_password(form.password.data)
             db.session.add(user)
             db.session.commit()
+            # yeni kullanıcı bakiyesi 0.00 ⇒ supply değişmez
             flash("Kayıt başarılı. Giriş yapın.", "success")
             return redirect(url_for("login"))
         return render_template("register.html", form=form)
@@ -115,7 +133,7 @@ def create_app():
                 flash("Alıcı bulunamadı.", "danger")
                 return redirect(url_for("transfer"))
 
-            # Komisyon: %0.2 (1/500). Gönderen öder, alıcı net tutarı alır.
+            # Komisyon: %0.2 (1/500)
             fee = (amount / Decimal("500")).quantize(Decimal("0.01"))
             total_debit = (amount + fee).quantize(Decimal("0.01"))
 
@@ -140,7 +158,7 @@ def create_app():
                 receiver.balance = (Decimal(receiver.balance) + amount).quantize(Decimal("0.01"))
                 pool.total = (Decimal(pool.total) + fee).quantize(Decimal("0.01"))
 
-                # Geçmiş kaydı
+                # Geçmiş
                 history = TransferHistory(
                     sender_id=sender.id,
                     receiver_id=receiver.id,
@@ -150,7 +168,7 @@ def create_app():
                 )
                 db.session.add(history)
 
-                # Bildirim kaydı
+                # Bildirim
                 notif = Notification(
                     sender_id=sender.id,
                     receiver_id=receiver.id,
@@ -158,6 +176,15 @@ def create_app():
                     message=(form.message.data or "").strip() if getattr(form, "message", None) else None
                 )
                 db.session.add(notif)
+
+                # Circulating supply cache: komisyon kadar azalır
+                cs = db.session.get(CirculatingSupply, 1)
+                if cs:
+                    cs.total = (Decimal(cs.total) - fee).quantize(Decimal("0.01"))
+                else:
+                    # güvenlik: tutarsızlıkta yeniden hesapla
+                    total = db.session.query(func.coalesce(func.sum(User.balance), 0)).scalar() or 0
+                    db.session.add(CirculatingSupply(id=1, total=Decimal(total).quantize(Decimal("0.01"))))
 
                 db.session.commit()
                 flash(f"{to_email} adresine {amount} SRDS gönderildi.", "success")
@@ -200,15 +227,13 @@ def create_app():
 
         return render_template("history.html", history=history_rows)
 
-    #qr generation
     @app.route("/qr")
     @login_required
     def qr():
         email = current_user.email
-        qr_code = generate_qr(email)  # base64 string
+        qr_code = generate_qr(email)  # base64
         return render_template("qr.html", qr_code=qr_code, email=email)
 
-    
     @app.route("/notifications")
     @login_required
     def notifications():
