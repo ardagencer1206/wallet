@@ -263,7 +263,7 @@ def create_app():
                 flash("Kasa bulunamadı.", "danger")
                 return render_template("exchange.html", form=form, price=price)
 
-            COMM = Decimal("1") / Decimal("500")  # %0.2
+            COMM = Decimal("1") / Decimal("100")  # %0.2
 
             try:
                 user = db.session.execute(
