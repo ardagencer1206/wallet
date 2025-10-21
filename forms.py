@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import (
-    StringField, PasswordField, SubmitField, DecimalField, TextAreaField, RadioField
+    StringField, PasswordField, SubmitField, DecimalField, TextAreaField, HiddenField
 )
 from wtforms.validators import DataRequired, Email, Length, Optional, NumberRange
 
@@ -26,18 +26,16 @@ class TransferForm(FlaskForm):
 
 
 class ExchangeForm(FlaskForm):
-    side = RadioField(
-        "İşlem",
-        choices=[("buy", "SRDS Al (TRY → SRDS)"), ("sell", "SRDS Sat (SRDS → TRY)")],
-        default="buy",
-        validators=[DataRequired()],
-    )
-    amount_try = DecimalField("TRY Tutarı", places=2,
-                              validators=[Optional(), NumberRange(min=0.01)])
-    amount_srds = DecimalField("SRDS Tutarı", places=2,
-                               validators=[Optional(), NumberRange(min=0.01)])
+    # HTML tarafında:
+    #  - Alış formu içinde:  <input type="hidden" name="side" value="buy">
+    #  - Satış formu içinde: <input type="hidden" name="side" value="sell">
+    side = HiddenField(validators=[DataRequired(message="İşlem tipi eksik.")])
 
-    # Ayrı butonlar: HTML'de "submit_buy" ve "submit_sell" kullanılabiliyor
+    amount_try = DecimalField("TRY Tutarı", places=2,
+                              validators=[Optional(), NumberRange(min=0.01, message="En az 0.01 olmalı.")])
+    amount_srds = DecimalField("SRDS Tutarı", places=2,
+                               validators=[Optional(), NumberRange(min=0.01, message="En az 0.01 olmalı.")])
+
     submit_buy = SubmitField("Satın Al")
     submit_sell = SubmitField("Sat")
 
@@ -46,15 +44,17 @@ class ExchangeForm(FlaskForm):
         if not ok:
             return False
 
-        if self.side.data == "buy":
+        side_val = (self.side.data or "").strip().lower()
+        if side_val == "buy":
             if not self.amount_try.data:
                 self.amount_try.errors.append("Alış için TRY tutarı girin.")
                 return False
-        elif self.side.data == "sell":
+        elif side_val == "sell":
             if not self.amount_srds.data:
                 self.amount_srds.errors.append("Satış için SRDS tutarı girin.")
                 return False
         else:
             self.side.errors.append("Geçersiz işlem.")
             return False
+
         return True
