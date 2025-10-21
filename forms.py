@@ -19,7 +19,8 @@ class LoginForm(FlaskForm):
 
 class TransferForm(FlaskForm):
     to_email = StringField("Alıcı Email", validators=[DataRequired(), Email()])
-    amount = DecimalField("Miktar (SRDS)", places=2, validators=[DataRequired(), NumberRange(min=0.01)])
+    amount = DecimalField("Miktar (SRDS)", places=2,
+                          validators=[DataRequired(), NumberRange(min=0.01)])
     message = TextAreaField("Mesaj", validators=[Optional()])
     submit = SubmitField("Gönder")
 
@@ -31,14 +32,20 @@ class ExchangeForm(FlaskForm):
         default="buy",
         validators=[DataRequired()],
     )
-    amount_try = DecimalField("TRY Tutarı", places=2, validators=[Optional(), NumberRange(min=0.01)])
-    amount_srds = DecimalField("SRDS Tutarı", places=2, validators=[Optional(), NumberRange(min=0.01)])
-    submit = SubmitField("İşlemi Onayla")
+    amount_try = DecimalField("TRY Tutarı", places=2,
+                              validators=[Optional(), NumberRange(min=0.01)])
+    amount_srds = DecimalField("SRDS Tutarı", places=2,
+                               validators=[Optional(), NumberRange(min=0.01)])
+
+    # Ayrı butonlar: HTML'de "submit_buy" ve "submit_sell" kullanılabiliyor
+    submit_buy = SubmitField("Satın Al")
+    submit_sell = SubmitField("Sat")
 
     def validate(self, **kwargs):
         ok = super().validate(**kwargs)
         if not ok:
             return False
+
         if self.side.data == "buy":
             if not self.amount_try.data:
                 self.amount_try.errors.append("Alış için TRY tutarı girin.")
