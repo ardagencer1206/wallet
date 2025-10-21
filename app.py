@@ -312,20 +312,26 @@ def create_app():
                         flash("Geçersiz SRDS tutarı.", "danger"); db.session.rollback()
                         return render_template("exchange.html", form=form, price=price)
 
+                    # Kullanıcının SRDS'ine ek olarak %0.2 komisyon SRDS tahsil edilir
+                    fee_srds = (amt_srds * fee_rate).quantize(Decimal("0.01"))
+                    total_srds_debit = (amt_srds + fee_srds).quantize(Decimal("0.01"))
+
+                    # TRY ödemesi satılan miktar (amt_srds) üstünden hesaplanır
                     gross_try = (amt_srds * price).quantize(Decimal("0.01"))
 
-                    if me.balance < amt_srds:
-                        flash("SRDS bakiyesi yetersiz.", "danger"); db.session.rollback()
+                    # Bakiye ve likidite kontrolleri
+                    if me.balance < total_srds_debit:
+                        flash("SRDS bakiyesi yetersiz (komisyon dahil).", "danger"); db.session.rollback()
                         return render_template("exchange.html", form=form, price=price)
                     if kasa.try_balance < gross_try:
                         flash("Yetersiz TRY likiditesi.", "danger"); db.session.rollback()
                         return render_template("exchange.html", form=form, price=price)
 
-                    # SRDS tamamı havuza gider (komisyon içkin)
-                    me.balance = (Decimal(me.balance) - amt_srds).quantize(Decimal("0.01"))
-                    pool.total = (Decimal(pool.total) + amt_srds).quantize(Decimal("0.01"))
-                    # Supply satılan kadar düşer
-                    cs.total = (Decimal(cs.total) - amt_srds).quantize(Decimal("0.01"))
+                    # SRDS: tamamı havuza, ek olarak komisyon da havuza
+                    me.balance = (Decimal(me.balance) - total_srds_debit).quantize(Decimal("0.01"))
+                    pool.total = (Decimal(pool.total) + total_srds_debit).quantize(Decimal("0.01"))
+                    # Dolaşımdan düşüş: satılan + komisyon
+                    cs.total = (Decimal(cs.total) - total_srds_debit).quantize(Decimal("0.01"))
                     # TRY kasa -> kullanıcı
                     kasa.try_balance = (Decimal(kasa.try_balance) - gross_try).quantize(Decimal("0.01"))
                     me.try_balance = (Decimal(me.try_balance) + gross_try).quantize(Decimal("0.01"))
@@ -333,7 +339,7 @@ def create_app():
                     db.session.commit()
                     upsert_srds_value()
 
-                    flash(f"{amt_srds} SRDS satıldı. {gross_try} TRY yatırıldı.", "success")
+                    flash(f"{amt_srds} SRDS satıldı. {gross_try} TRY yatırıldı. Komisyon {fee_srds} SRDS (ek olarak tahsil edildi).", "success")
                     return redirect(url_for("home"))
 
             except Exception:
