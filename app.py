@@ -54,7 +54,7 @@ def create_app():
         db.session.commit()
 
     def upsert_srds_value():
-        # user id=11 TRY / circulating_supply
+        # SRDS fiyatı = kasa TRY / dolaşımdaki SRDS
         kasa = db.session.get(User, 11) or User.query.filter_by(email="sardisiumkasasi@gmail.com").first()
         circ = db.session.get(CirculatingSupply, 1)
         value = Decimal("0")
@@ -107,13 +107,13 @@ def create_app():
             db.session.add(CommissionPool(id=1, total=Decimal("0.00")))
             db.session.commit()
 
-        # CirculatingSupply init + hesap
+        # Dolaşımdaki arz
         if not db.session.get(CirculatingSupply, 1):
             db.session.add(CirculatingSupply(id=1, total=Decimal("0.00")))
             db.session.commit()
         recalc_supply()
 
-        # srds_value satırı yoksa oluştur ve güncelle
+        # srds_value yoksa
         if not SrdsValue.query.first():
             db.session.add(SrdsValue(value=Decimal("0")))
             db.session.commit()
@@ -182,7 +182,7 @@ def create_app():
                 flash("Alıcı bulunamadı.", "danger")
                 return redirect(url_for("transfer"))
 
-            fee = (amount / Decimal("500")).quantize(Decimal("0.01"))
+            fee = (amount / Decimal("500")).quantize(Decimal("0.01"))  # %0.2
             total_debit = (amount + fee).quantize(Decimal("0.01"))
 
             try:
@@ -205,22 +205,19 @@ def create_app():
                 receiver.balance = (Decimal(receiver.balance) + amount).quantize(Decimal("0.01"))
                 pool.total = (Decimal(pool.total) + fee).quantize(Decimal("0.01"))
 
-                history = TransferHistory(
+                db.session.add(TransferHistory(
                     sender_id=sender.id,
                     receiver_id=receiver.id,
                     amount=amount,
                     commission=fee,
                     message=(form.message.data or "").strip() if getattr(form, "message", None) else None,
-                )
-                db.session.add(history)
-
-                notif = Notification(
+                ))
+                db.session.add(Notification(
                     sender_id=sender.id,
                     receiver_id=receiver.id,
                     amount=amount,
                     message=(form.message.data or "").strip() if getattr(form, "message", None) else None,
-                )
-                db.session.add(notif)
+                ))
 
                 cs = db.session.get(CirculatingSupply, 1)
                 if cs:
@@ -297,7 +294,7 @@ def create_app():
                     me.balance = (Decimal(me.balance) + net_srds).quantize(Decimal("0.01"))
                     # Komisyon SRDS havuza
                     pool.total = (Decimal(pool.total) + fee_srds).quantize(Decimal("0.01"))
-                    # Supply komisyon kadar düşer
+                    # Dolaşımdan komisyon kadar düş
                     cs.total = (Decimal(cs.total) - fee_srds).quantize(Decimal("0.01"))
 
                     db.session.commit()
@@ -312,11 +309,9 @@ def create_app():
                         flash("Geçersiz SRDS tutarı.", "danger"); db.session.rollback()
                         return render_template("exchange.html", form=form, price=price)
 
-                    # Kullanıcının SRDS'ine ek olarak %0.2 komisyon SRDS tahsil edilir
+                    # Satışta SRDS yakılır, komisyon SRDS havuzuna gider
                     fee_srds = (amt_srds * fee_rate).quantize(Decimal("0.01"))
                     total_srds_debit = (amt_srds + fee_srds).quantize(Decimal("0.01"))
-
-                    # TRY ödemesi satılan miktar (amt_srds) üstünden hesaplanır
                     gross_try = (amt_srds * price).quantize(Decimal("0.01"))
 
                     # Bakiye ve likidite kontrolleri
@@ -327,19 +322,22 @@ def create_app():
                         flash("Yetersiz TRY likiditesi.", "danger"); db.session.rollback()
                         return render_template("exchange.html", form=form, price=price)
 
-                    # SRDS: tamamı havuza, ek olarak komisyon da havuza
+                    # Kullanıcıdan SRDS düş: satılan + komisyon
                     me.balance = (Decimal(me.balance) - total_srds_debit).quantize(Decimal("0.01"))
-                    pool.total = (Decimal(pool.total) + total_srds_debit).quantize(Decimal("0.01"))
-                    # Dolaşımdan düşüş: satılan + komisyon
+                    # Komisyon havuza ekle (yalnızca komisyon)
+                    pool.total = (Decimal(pool.total) + fee_srds).quantize(Decimal("0.01"))
+                    # Dolaşımdan hem satılan hem komisyonu düş (yakım + havuz dışı)
                     cs.total = (Decimal(cs.total) - total_srds_debit).quantize(Decimal("0.01"))
                     # TRY kasa -> kullanıcı
                     kasa.try_balance = (Decimal(kasa.try_balance) - gross_try).quantize(Decimal("0.01"))
                     me.try_balance = (Decimal(me.try_balance) + gross_try).quantize(Decimal("0.01"))
 
+                    # Not: Satılan SRDS kasa ya da havuza EKLENMEZ; amt_srds yakılır.
+
                     db.session.commit()
                     upsert_srds_value()
 
-                    flash(f"{amt_srds} SRDS satıldı. {gross_try} TRY yatırıldı. Komisyon {fee_srds} SRDS (ek olarak tahsil edildi).", "success")
+                    flash(f"{amt_srds} SRDS satıldı (yakıldı). {gross_try} TRY yatırıldı. Komisyon {fee_srds} SRDS.", "success")
                     return redirect(url_for("home"))
 
             except Exception:
