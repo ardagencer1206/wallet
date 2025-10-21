@@ -72,7 +72,6 @@ def create_app():
         rec = SrdsValue.query.first()
         if rec and rec.value and Decimal(rec.value) > 0:
             return Decimal(rec.value)
-        # fallback hesaplama
         return upsert_srds_value()
 
     with app.app_context():
@@ -231,7 +230,7 @@ def create_app():
                     db.session.add(CirculatingSupply(id=1, total=Decimal(total).quantize(Decimal("0.01"))))
 
                 db.session.commit()
-                upsert_srds_value()  # komisyon sonrası fiyat güncelle
+                upsert_srds_value()
 
                 flash(f"{to_email} adresine {amount} SRDS gönderildi.", "success")
                 return redirect(url_for("home"))
@@ -322,12 +321,12 @@ def create_app():
                         flash("Yetersiz TRY likiditesi.", "danger"); db.session.rollback()
                         return render_template("exchange.html", form=form, price=price)
 
-                    # SRDS tamamen havuza aktarılır (komisyon içinde)
+                    # SRDS tamamı havuza gider (komisyon içkin)
                     me.balance = (Decimal(me.balance) - amt_srds).quantize(Decimal("0.01"))
                     pool.total = (Decimal(pool.total) + amt_srds).quantize(Decimal("0.01"))
                     # Supply satılan kadar düşer
                     cs.total = (Decimal(cs.total) - amt_srds).quantize(Decimal("0.01"))
-                    # TRY kasadan kullanıcıya
+                    # TRY kasa -> kullanıcı
                     kasa.try_balance = (Decimal(kasa.try_balance) - gross_try).quantize(Decimal("0.01"))
                     me.try_balance = (Decimal(me.try_balance) + gross_try).quantize(Decimal("0.01"))
 
