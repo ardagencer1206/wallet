@@ -3,6 +3,7 @@ from wtforms import (
     StringField, PasswordField, SubmitField, DecimalField, TextAreaField, HiddenField
 )
 from wtforms.validators import DataRequired, Email, Length, Optional, NumberRange
+from flask import request
 
 
 class RegisterForm(FlaskForm):
@@ -26,15 +27,15 @@ class TransferForm(FlaskForm):
 
 
 class ExchangeForm(FlaskForm):
-    # HTML tarafında:
-    #  - Alış formu içinde:  <input type="hidden" name="side" value="buy">
-    #  - Satış formu içinde: <input type="hidden" name="side" value="sell">
-    side = HiddenField(validators=[DataRequired(message="İşlem tipi eksik.")])
+    # HTML:
+    #  <form ...> {{ form.hidden_tag() }} <input type="hidden" name="side" value="buy"> ... </form>
+    #  <form ...> {{ form.hidden_tag() }} <input type="hidden" name="side" value="sell"> ... </form>
+    side = HiddenField(validators=[Optional()])
 
     amount_try = DecimalField("TRY Tutarı", places=2,
-                              validators=[Optional(), NumberRange(min=0.01, message="En az 0.01 olmalı.")])
+                              validators=[Optional(), NumberRange(min=0.01)])
     amount_srds = DecimalField("SRDS Tutarı", places=2,
-                               validators=[Optional(), NumberRange(min=0.01, message="En az 0.01 olmalı.")])
+                               validators=[Optional(), NumberRange(min=0.01)])
 
     submit_buy = SubmitField("Satın Al")
     submit_sell = SubmitField("Sat")
@@ -44,17 +45,22 @@ class ExchangeForm(FlaskForm):
         if not ok:
             return False
 
+        pressed_buy = "submit_buy" in request.form
+        pressed_sell = "submit_sell" in request.form
         side_val = (self.side.data or "").strip().lower()
-        if side_val == "buy":
+
+        # Hangi form geldiyse ona göre alanı zorunlu yap.
+        if pressed_buy or side_val == "buy":
             if not self.amount_try.data:
                 self.amount_try.errors.append("Alış için TRY tutarı girin.")
                 return False
-        elif side_val == "sell":
+        elif pressed_sell or side_val == "sell":
             if not self.amount_srds.data:
                 self.amount_srds.errors.append("Satış için SRDS tutarı girin.")
                 return False
         else:
-            self.side.errors.append("Geçersiz işlem.")
+            # Ne buton ne side belirli değilse reddet.
+            self.side.errors.append("İşlem tipi tespit edilemedi.")
             return False
 
         return True
