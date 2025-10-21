@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card bg-transparent border-0">
+      <div class="card-body glass p-4">
+        <h4 class="mb-3">Exchange</h4>
+        <p class="text-muted mb-4">Fiyat: <strong>{{ '%.8f'|format(price or 0) }} TRY / SRDS</strong></p>
+        <form method="post" novalidate>
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            {{ form.side.label(class="form-label") }}
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                {{ form.side(value="buy", class="form-check-input", id="side_buy") }}
+                <label class="form-check-label" for="side_buy">TRY → SRDS</label>
+              </div>
+              <div class="form-check">
+                {{ form.side(value="sell", class="form-check-input", id="side_sell") }}
+                <label class="form-check-label" for="side_sell">SRDS → TRY</label>
+              </div>
+            </div>
+          </div>
+
+          <div id="buyFields" class="mb-3">
+            {{ form.amount_try.label(class="form-label") }}
+            {{ form.amount_try(class="form-control", placeholder="Örn. 100.00") }}
+          </div>
+
+          <div id="sellFields" class="mb-3" style="display:none">
+            {{ form.amount_srds.label(class="form-label") }}
+            {{ form.amount_srds(class="form-control", placeholder="Örn. 25.00000000") }}
+          </div>
+
+          {{ form.submit(class="btn btn-gradient") }}
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const sideBuy = document.getElementById('side_buy');
+  const sideSell = document.getElementById('side_sell');
+  const buyBox = document.getElementById('buyFields');
+  const sellBox = document.getElementById('sellFields');
+
+  function sync() {
+    const buy = sideBuy.checked;
+    buyBox.style.display = buy ? '' : 'none';
+    sellBox.style.display = buy ? 'none' : '';
+  }
+  sideBuy.addEventListener('change', sync);
+  sideSell.addEventListener('change', sync);
+  sync();
+</script>
+{% endblock %}
