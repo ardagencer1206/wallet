@@ -20,3 +20,8 @@ class TransferForm(FlaskForm):
     amount = DecimalField("Miktar (SRDS)", places=2, validators=[DataRequired(), NumberRange(min=0.01)])
     message = TextAreaField("Mesaj", validators=[Optional()])
     submit = SubmitField("Gönder")
+# ek: en alta koy
+class BuyForm(FlaskForm):
+    amount = DecimalField("Alınacak SRDS miktarı", places=2,
+                          validators=[DataRequired(), NumberRange(min=0.01)])
+    submit = SubmitField("Satın Al")
