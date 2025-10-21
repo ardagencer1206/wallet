@@ -1,13 +1,43 @@
 # forms.py
 from flask_wtf import FlaskForm
 from wtforms import (
-    StringField, PasswordField, SubmitField, DecimalField, TextAreaField, HiddenField
+    StringField, PasswordField, SubmitField, TextAreaField, HiddenField
 )
 from wtforms.validators import DataRequired, Email, Length, Optional
+from wtforms.fields import DecimalField
 from flask import request
+from decimal import Decimal, InvalidOperation
 
 
-# -------- Auth -------- #
+# ---- helpers ----
+def _none_if_blank_or_zero(v):
+    if v is None:
+        return None
+    s = str(v).strip()
+    if s in ("", "0", "0.0", "0.00"):
+        return None
+    return v
+
+
+class ZeroAsNoneDecimalField(DecimalField):
+    """'0' / '0.00' gönderilirse data=None yap."""
+    def process_formdata(self, valuelist):
+        super().process_formdata(valuelist)
+        try:
+            if self.data is None:
+                return
+            if isinstance(self.data, Decimal):
+                if self.data == Decimal("0"):
+                    self.data = None
+            else:
+                # float/int geldi ise
+                if float(self.data) == 0.0:
+                    self.data = None
+        except (InvalidOperation, ValueError):
+            self.data = None
+
+
+# ---- Auth ----
 class RegisterForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
     password = PasswordField("Şifre", validators=[DataRequired(), Length(min=6)])
@@ -20,24 +50,27 @@ class LoginForm(FlaskForm):
     submit = SubmitField("Giriş Yap")
 
 
-# -------- Transfer -------- #
+# ---- Transfer ----
 class TransferForm(FlaskForm):
     to_email = StringField("Alıcı Email", validators=[DataRequired(), Email()])
-    amount = DecimalField("Miktar (SRDS)", places=2, validators=[DataRequired()])
+    amount = ZeroAsNoneDecimalField("Miktar (SRDS)", places=2, validators=[DataRequired()])
     message = TextAreaField("Mesaj", validators=[Optional()])
     submit = SubmitField("Gönder")
 
 
-# -------- Exchange (BUY/SELL) -------- #
+# ---- Exchange (BUY/SELL) ----
 class ExchangeForm(FlaskForm):
-    # HTML:
-    #  <form method="post"> {{ form.hidden_tag() }} <input type="hidden" name="side" value="buy"> ... </form>
-    #  <form method="post"> {{ form.hidden_tag() }} <input type="hidden" name="side" value="sell"> ... </form>
+    # HTML’de:
+    #  <!-- BUY -->
+    #  <form method="post">{% raw %}{{ form.hidden_tag() }}{% endraw %}<input type="hidden" name="side" value="buy">
+    #     {% raw %}{{ form.amount_try }}{{ form.submit_buy }}{% endraw %}</form>
+    #  <!-- SELL -->
+    #  <form method="post">{% raw %}{{ form.hidden_tag() }}{% endraw %}<input type="hidden" name="side" value="sell">
+    #     {% raw %}{{ form.amount_srds }}{{ form.submit_sell }}{% endraw %}</form>
     side = HiddenField(validators=[Optional()])
 
-    # İki alanda da sadece Optional. Eşik kontrolleri validate() içinde yapılır.
-    amount_try = DecimalField("TRY Tutarı", places=2, validators=[Optional()], render_kw={"inputmode": "decimal"})
-    amount_srds = DecimalField("SRDS Tutarı", places=2, validators=[Optional()], render_kw={"inputmode": "decimal"})
+    amount_try  = ZeroAsNoneDecimalField("TRY Tutarı",  places=2, validators=[Optional()], filters=[_none_if_blank_or_zero], render_kw={"inputmode": "decimal"})
+    amount_srds = ZeroAsNoneDecimalField("SRDS Tutarı", places=2, validators=[Optional()], filters=[_none_if_blank_or_zero], render_kw={"inputmode": "decimal"})
 
     submit_buy = SubmitField("Satın Al")
     submit_sell = SubmitField("Sat")
@@ -56,7 +89,7 @@ class ExchangeForm(FlaskForm):
     @staticmethod
     def _gt_zero(val) -> bool:
         try:
-            return (val is not None) and (val > 0)
+            return (val is not None) and (Decimal(val) > 0)
         except Exception:
             return False
 
@@ -69,13 +102,15 @@ class ExchangeForm(FlaskForm):
             self.side.errors.append("İşlem tipi tespit edilemedi.")
             return False
 
-        # Karşı alanın kazara "0" gelmesi durumunda görmezden gel.
-        if side == "buy" and (self.amount_srds.data == 0 or self.amount_srds.data is None):
+        # Yan alan “0 / boş” ise temizle (buy → SRDS, sell → TRY)
+        if side == "buy" and (self.amount_srds.data in (None, Decimal("0"))):
             self.amount_srds.data = None
-        if side == "sell" and (self.amount_try.data == 0 or self.amount_try.data is None):
+            self.amount_srds.errors = []
+        if side == "sell" and (self.amount_try.data in (None, Decimal("0"))):
             self.amount_try.data = None
+            self.amount_try.errors = []
 
-        # Aynı anda iki alan doluysa reddet.
+        # İki alan aynı anda doluysa reddet.
         if self.amount_try.data and self.amount_srds.data:
             self.amount_try.errors.append("Aynı anda iki tutarı girmeyin.")
             self.amount_srds.errors.append("Aynı anda iki tutarı girmeyin.")
@@ -87,16 +122,16 @@ class ExchangeForm(FlaskForm):
                 self.amount_try.errors.append("Alış için TRY tutarı > 0 olmalı.")
                 return False
             if self.amount_srds.data is not None:
-                self.amount_srds.errors.append("Alış işleminde SRDS tutarı girmeyin.")
+                self.amount_srds.errors.append("Alışta SRDS alanını boş bırakın.")
                 return False
 
-        elif side == "sell":
+        else:  # sell
             # SELL: SRDS > 0 zorunlu, TRY boş olmalı
             if not self._gt_zero(self.amount_srds.data):
                 self.amount_srds.errors.append("Satış için SRDS tutarı > 0 olmalı.")
                 return False
             if self.amount_try.data is not None:
-                self.amount_try.errors.append("Satış işleminde TRY tutarı girmeyin.")
+                self.amount_try.errors.append("Satışta TRY alanını boş bırakın.")
                 return False
 
         return True
