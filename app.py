@@ -11,7 +11,7 @@ from models import (
     db, User, CommissionPool, TransferHistory, Notification,
     CirculatingSupply, SrdsValue
 )
-from forms import RegisterForm, LoginForm, TransferForm
+from forms import RegisterForm, LoginForm, TransferForm, ExchangeForm
 from qrgenerate import generate_qr
 
 
@@ -54,7 +54,7 @@ def create_app():
         db.session.commit()
 
     def upsert_srds_value():
-        """user id=11 try_balance / circulating_supply"""
+        # user id=11 TRY / circulating_supply
         kasa = db.session.get(User, 11) or User.query.filter_by(email="sardisiumkasasi@gmail.com").first()
         circ = db.session.get(CirculatingSupply, 1)
         value = Decimal("0")
@@ -68,11 +68,18 @@ def create_app():
         db.session.commit()
         return value
 
+    def get_price():
+        rec = SrdsValue.query.first()
+        if rec and rec.value and Decimal(rec.value) > 0:
+            return Decimal(rec.value)
+        # fallback hesaplama
+        return upsert_srds_value()
+
     with app.app_context():
         db.create_all()
         inspector = inspect(db.engine)
 
-        # user.balance yoksa ekle
+        # user.balance yoksa
         cols = [c["name"] for c in inspector.get_columns("user")]
         if "balance" not in cols:
             db.session.execute(text(
@@ -80,7 +87,7 @@ def create_app():
             ))
             db.session.commit()
 
-        # user.try_balance yoksa ekle
+        # user.try_balance yoksa
         cols = [c["name"] for c in inspector.get_columns("user")]
         if "try_balance" not in cols:
             db.session.execute(text(
@@ -88,7 +95,7 @@ def create_app():
             ))
             db.session.commit()
 
-        # transfer_history.message yoksa ekle
+        # transfer_history.message yoksa
         cols = [c["name"] for c in inspector.get_columns("transfer_history")]
         if "message" not in cols:
             db.session.execute(text(
@@ -113,11 +120,11 @@ def create_app():
             db.session.commit()
         upsert_srds_value()
 
-    # Tüm şablonlara srds_value enjekte et
+    # Tüm şablonlara srds_value enjekte
     @app.context_processor
     def inject_srds_value():
         try:
-            val = upsert_srds_value()
+            val = get_price()
         except Exception:
             db.session.rollback()
             row = SrdsValue.query.first()
@@ -224,9 +231,7 @@ def create_app():
                     db.session.add(CirculatingSupply(id=1, total=Decimal(total).quantize(Decimal("0.01"))))
 
                 db.session.commit()
-
-                # komisyon sonrası değer güncelle
-                upsert_srds_value()
+                upsert_srds_value()  # komisyon sonrası fiyat güncelle
 
                 flash(f"{to_email} adresine {amount} SRDS gönderildi.", "success")
                 return redirect(url_for("home"))
@@ -234,11 +239,109 @@ def create_app():
             except NoResultFound:
                 db.session.rollback()
                 flash("İşlem sırasında kullanıcı bulunamadı.", "danger")
-            except Exception as e:
+            except Exception:
                 db.session.rollback()
-                flash(f"İşlem başarısız: {str(e)}", "danger")
+                flash("İşlem başarısız.", "danger")
 
         return render_template("transfer.html", form=form)
+
+    @app.route("/exchange", methods=["GET", "POST"])
+    @login_required
+    def exchange():
+        form = ExchangeForm()
+        price = get_price()
+        if form.validate_on_submit():
+            side = form.side.data  # 'buy' | 'sell'
+            if price <= 0:
+                flash("Fiyat tanımsız.", "danger")
+                return render_template("exchange.html", form=form, price=price)
+
+            fee_rate = Decimal("0.002")  # %0.2
+            KASA_ID = 11
+
+            try:
+                me = db.session.execute(
+                    select(User).where(User.id == current_user.id).with_for_update()
+                ).scalar_one()
+                kasa = db.session.execute(
+                    select(User).where(User.id == KASA_ID).with_for_update()
+                ).scalar_one()
+                pool = db.session.execute(
+                    select(CommissionPool).where(CommissionPool.id == 1).with_for_update()
+                ).scalar_one()
+                cs = db.session.execute(
+                    select(CirculatingSupply).where(CirculatingSupply.id == 1).with_for_update()
+                ).scalar_one()
+
+                if side == "buy":
+                    amt_try = (form.amount_try.data or Decimal("0")).quantize(Decimal("0.01"))
+                    if amt_try <= 0:
+                        flash("Geçersiz TRY tutarı.", "danger"); db.session.rollback()
+                        return render_template("exchange.html", form=form, price=price)
+
+                    gross_srds = (amt_try / price).quantize(Decimal("0.01"))
+                    fee_srds = (gross_srds * fee_rate).quantize(Decimal("0.01"))
+                    net_srds = (gross_srds - fee_srds).quantize(Decimal("0.01"))
+
+                    if me.try_balance < amt_try:
+                        flash("TRY bakiyesi yetersiz.", "danger"); db.session.rollback()
+                        return render_template("exchange.html", form=form, price=price)
+                    if kasa.balance < gross_srds:
+                        flash("Yetersiz SRDS likiditesi.", "danger"); db.session.rollback()
+                        return render_template("exchange.html", form=form, price=price)
+
+                    # TRY hareketi
+                    me.try_balance = (Decimal(me.try_balance) - amt_try).quantize(Decimal("0.01"))
+                    kasa.try_balance = (Decimal(kasa.try_balance) + amt_try).quantize(Decimal("0.01"))
+                    # SRDS hareketi
+                    kasa.balance = (Decimal(kasa.balance) - gross_srds).quantize(Decimal("0.01"))
+                    me.balance = (Decimal(me.balance) + net_srds).quantize(Decimal("0.01"))
+                    # Komisyon SRDS havuza
+                    pool.total = (Decimal(pool.total) + fee_srds).quantize(Decimal("0.01"))
+                    # Supply komisyon kadar düşer
+                    cs.total = (Decimal(cs.total) - fee_srds).quantize(Decimal("0.01"))
+
+                    db.session.commit()
+                    upsert_srds_value()
+
+                    flash(f"{amt_try} TRY ile {net_srds} SRDS alındı. Komisyon {fee_srds} SRDS.", "success")
+                    return redirect(url_for("home"))
+
+                else:  # sell
+                    amt_srds = (form.amount_srds.data or Decimal("0")).quantize(Decimal("0.01"))
+                    if amt_srds <= 0:
+                        flash("Geçersiz SRDS tutarı.", "danger"); db.session.rollback()
+                        return render_template("exchange.html", form=form, price=price)
+
+                    gross_try = (amt_srds * price).quantize(Decimal("0.01"))
+
+                    if me.balance < amt_srds:
+                        flash("SRDS bakiyesi yetersiz.", "danger"); db.session.rollback()
+                        return render_template("exchange.html", form=form, price=price)
+                    if kasa.try_balance < gross_try:
+                        flash("Yetersiz TRY likiditesi.", "danger"); db.session.rollback()
+                        return render_template("exchange.html", form=form, price=price)
+
+                    # SRDS tamamen havuza aktarılır (komisyon içinde)
+                    me.balance = (Decimal(me.balance) - amt_srds).quantize(Decimal("0.01"))
+                    pool.total = (Decimal(pool.total) + amt_srds).quantize(Decimal("0.01"))
+                    # Supply satılan kadar düşer
+                    cs.total = (Decimal(cs.total) - amt_srds).quantize(Decimal("0.01"))
+                    # TRY kasadan kullanıcıya
+                    kasa.try_balance = (Decimal(kasa.try_balance) - gross_try).quantize(Decimal("0.01"))
+                    me.try_balance = (Decimal(me.try_balance) + gross_try).quantize(Decimal("0.01"))
+
+                    db.session.commit()
+                    upsert_srds_value()
+
+                    flash(f"{amt_srds} SRDS satıldı. {gross_try} TRY yatırıldı.", "success")
+                    return redirect(url_for("home"))
+
+            except Exception:
+                db.session.rollback()
+                flash("İşlem başarısız.", "danger")
+
+        return render_template("exchange.html", form=form, price=price)
 
     @app.route("/logout")
     @login_required
