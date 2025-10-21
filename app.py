@@ -44,7 +44,11 @@ def create_app():
 
     # ---- helpers ----
     def recalc_supply():
-        total = db.session.query(func.coalesce(func.sum(User.balance), 0)).scalar() or 0
+    # user id 11 HARİÇ
+        total = db.session.query(
+            func.coalesce(func.sum(User.balance), 0)
+        ).filter(User.id != 11).scalar() or 0
+
         cs = db.session.get(CirculatingSupply, 1)
         if not cs:
             cs = CirculatingSupply(id=1, total=Decimal(total))
@@ -52,6 +56,7 @@ def create_app():
         else:
             cs.total = Decimal(total).quantize(Decimal("0.01"))
         db.session.commit()
+
 
     def upsert_srds_value():
         """user id=11 try_balance / circulating_supply"""
