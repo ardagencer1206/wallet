@@ -1,58 +1,54 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-6">
-    <div class="card bg-transparent border-0">
-      <div class="card-body glass p-4">
-        <h4 class="mb-3">Exchange</h4>
-        <p class="text-muted mb-4">Fiyat: <strong>{{ '%.8f'|format(price or 0) }} TRY / SRDS</strong></p>
-        <form method="post" novalidate>
-          {{ form.hidden_tag() }}
+<div class="container">
+  <h2 class="mb-4 text-center">Exchange</h2>
 
-          <div class="mb-3">
-            {{ form.side.label(class="form-label") }}
-            <div class="d-flex gap-3">
-              <div class="form-check">
-                {{ form.side(value="buy", class="form-check-input", id="side_buy") }}
-                <label class="form-check-label" for="side_buy">TRY → SRDS</label>
-              </div>
-              <div class="form-check">
-                {{ form.side(value="sell", class="form-check-input", id="side_sell") }}
-                <label class="form-check-label" for="side_sell">SRDS → TRY</label>
-              </div>
+  <div class="row g-4">
+    <!-- TRY -> SRDS -->
+    <div class="col-md-6">
+      <div class="card bg-dark border-0 shadow-sm rounded-4">
+        <div class="card-body">
+          <h5 class="card-title text-info">TRY → SRDS</h5>
+          <p class="text-muted small mb-3">TRY bakiyeniz ile SRDS satın alın. İşlemden %0.2 komisyon kesilir.</p>
+          <form method="POST" action="{{ url_for('exchange') }}">
+            {{ form_try_to_srds.hidden_tag() }}
+            <div class="mb-3">
+              {{ form_try_to_srds.amount.label(class="form-label") }}
+              {{ form_try_to_srds.amount(class="form-control", placeholder="Miktar (TRY)") }}
             </div>
-          </div>
+            {{ form_try_to_srds.submit(class="btn btn-gradient w-100") }}
+          </form>
+        </div>
+      </div>
+    </div>
 
-          <div id="buyFields" class="mb-3">
-            {{ form.amount_try.label(class="form-label") }}
-            {{ form.amount_try(class="form-control", placeholder="Örn. 100.00") }}
-          </div>
-
-          <div id="sellFields" class="mb-3" style="display:none">
-            {{ form.amount_srds.label(class="form-label") }}
-            {{ form.amount_srds(class="form-control", placeholder="Örn. 25.00000000") }}
-          </div>
-
-          {{ form.submit(class="btn btn-gradient") }}
-        </form>
+    <!-- SRDS -> TRY -->
+    <div class="col-md-6">
+      <div class="card bg-dark border-0 shadow-sm rounded-4">
+        <div class="card-body">
+          <h5 class="card-title text-warning">SRDS → TRY</h5>
+          <p class="text-muted small mb-3">SRDS bakiyenizi TRY’ye çevirin. İşlemden %0.2 komisyon kesilir.</p>
+          <form method="POST" action="{{ url_for('exchange') }}">
+            {{ form_srds_to_try.hidden_tag() }}
+            <div class="mb-3">
+              {{ form_srds_to_try.amount.label(class="form-label") }}
+              {{ form_srds_to_try.amount(class="form-control", placeholder="Miktar (SRDS)") }}
+            </div>
+            {{ form_srds_to_try.submit(class="btn btn-gradient w-100") }}
+          </form>
+        </div>
       </div>
     </div>
   </div>
+
+  <!-- Kullanıcının mevcut bakiyeleri -->
+  <div class="mt-5 text-center">
+    <div class="p-3 rounded-4 bg-dark border">
+      <h6 class="text-muted">Mevcut Bakiyeleriniz</h6>
+      <p class="mb-1"><strong>SRDS:</strong> {{ '%.2f' % (current_user.balance or 0) }}</p>
+      <p class="mb-0"><strong>TRY:</strong> {{ '%.2f' % (current_user.try_balance or 0) }}</p>
+    </div>
+  </div>
 </div>
-
-<script>
-  const sideBuy = document.getElementById('side_buy');
-  const sideSell = document.getElementById('side_sell');
-  const buyBox = document.getElementById('buyFields');
-  const sellBox = document.getElementById('sellFields');
-
-  function sync() {
-    const buy = sideBuy.checked;
-    buyBox.style.display = buy ? '' : 'none';
-    sellBox.style.display = buy ? 'none' : '';
-  }
-  sideBuy.addEventListener('change', sync);
-  sideSell.addEventListener('change', sync);
-  sync();
-</script>
 {% endblock %}
