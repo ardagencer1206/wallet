@@ -31,10 +31,8 @@ class TransferForm(FlaskForm):
 
 # ---- Exchange (BUY/SELL) ----
 class ExchangeForm(FlaskForm):
-    # HTML tarafı değişmeyecek.
     side = HiddenField(validators=[Optional()])
 
-    # Her iki alan Optional. Eşik kontrolleri validate() içinde.
     amount_try = DecimalField("TRY Tutarı", places=2, validators=[Optional()])
     amount_srds = DecimalField("SRDS Tutarı", places=2, validators=[Optional()])
 
@@ -68,17 +66,14 @@ class ExchangeForm(FlaskForm):
             self.side.errors.append("İşlem tipi tespit edilemedi.")
             return False
 
-        # Karşı alanı HER ZAMAN yok say. (HTML değişmeden çalışır)
+        # Yanlış alanı temizle
         if side == "buy":
-            # Tahmini SRDS input’u gönderilse bile temizle.
             self.amount_srds.data = None
             self.amount_srds.errors = []
         else:  # sell
-            # Yanlışlıkla TRY gönderilse bile temizle.
             self.amount_try.data = None
             self.amount_try.errors = []
 
-        # Artık sadece ilgili alanı kontrol et.
         if side == "buy":
             if not self._gt_zero(self.amount_try.data):
                 self.amount_try.errors.append("Alış için TRY tutarı > 0 olmalı.")
