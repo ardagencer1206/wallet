@@ -1,4 +1,3 @@
-# models.py
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
@@ -13,7 +12,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     balance = db.Column(db.Numeric(18, 2), nullable=False, server_default="0.00")
-    try_balance = db.Column(db.Numeric(18, 2), nullable=False, server_default="0.00")
+    try_balance = db.Column(db.Numeric(18, 2), nullable=False, server_default="0.00")  # yeni eklendi
 
     def set_password(self, raw_password):
         self.password_hash = generate_password_hash(raw_password)
@@ -40,7 +39,7 @@ class SrdsValue(db.Model):
     __tablename__ = "srds_value"
 
     id = db.Column(db.Integer, primary_key=True)
-    value = db.Column(db.Numeric(20, 8), nullable=False, server_default="0.00")
+    value = db.Column(db.Numeric(20, 8), nullable=False, server_default="0.00")  # oranı daha hassas tut
 
 
 class TransferHistory(db.Model):
@@ -67,24 +66,3 @@ class Notification(db.Model):
 
     sender = db.relationship("User", foreign_keys=[sender_id])
     receiver = db.relationship("User", foreign_keys=[receiver_id])
-
-
-class ExchangeHistory(db.Model):
-    __tablename__ = "exchange_history"
-
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-
-    # BUY: TRY -> SRDS,  SELL: SRDS -> TRY
-    side = db.Column(db.String(4), nullable=False)  # "BUY" | "SELL"
-
-    # İşlemdeki tutarlar
-    amount_try = db.Column(db.Numeric(18, 2), nullable=False)     # ödenen/alınan TRY
-    amount_srds = db.Column(db.Numeric(18, 8), nullable=False)     # alınan/satılan SRDS
-
-    # Komisyon (SRDS cinsinden)
-    fee_srds = db.Column(db.Numeric(18, 8), nullable=False)
-
-    created_at = db.Column(db.DateTime, server_default=db.func.now())
-
-    user = db.relationship("User", foreign_keys=[user_id])
