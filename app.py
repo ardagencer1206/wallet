@@ -268,7 +268,7 @@ def create_app():
             price = Decimal(price).quantize(Decimal("0.00000001"))
             try_cost_try = (amount * price).quantize(Decimal("0.01"))
 
-            fee_srds = (amount * Decimal("0.005")).quantize(Decimal("0.01"))  # %0.2
+            fee_srds = (amount * Decimal("0.007")).quantize(Decimal("0.01"))  # %0.2
             transfer_srds = (amount - fee_srds).quantize(Decimal("0.01"))
             if transfer_srds <= 0:
                 flash("Komisyon sonrası miktar sıfırlandı.", "danger")
@@ -368,7 +368,7 @@ def create_app():
 
             price = Decimal(price).quantize(Decimal("0.00000001"))
 
-            fee_srds = (amount * Decimal("0.005")).quantize(Decimal("0.01"))      # %0.2 SRDS komisyon
+            fee_srds = (amount * Decimal("0.007")).quantize(Decimal("0.01"))      # %0.2 SRDS komisyon
             net_srds = (amount - fee_srds).quantize(Decimal("0.01"))               # yakılacak net SRDS
             if net_srds <= 0:
                 flash("Komisyon sonrası net miktar sıfırlandı.", "danger")
